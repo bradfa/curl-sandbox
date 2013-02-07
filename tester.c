@@ -6,9 +6,10 @@
 #include <stdio.h>
 #include <unistd.h>
 
-static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 LIST_HEAD(listhead, entry) head;
+int list_len;
 
 struct entry {
 	char *data;
@@ -17,15 +18,24 @@ struct entry {
 
 void *curl_thread(void *aa)
 {
+	int count;
 	for (;;) {
-		sleep(1);
+		count = 0;
+		pthread_mutex_lock(&mutex);
+		while (!head.lh_first)
+			pthread_cond_wait(&cond, &mutex);
+		while (head.lh_first && (count < 128)) {
+			/* TODO: Build some curls */
+		}
 	}
 }
 
 int main(void)
 {
 	int ret;
+	struct entry *a;
 	pthread_t thread;
+	list_len = 0;
 	ret = pthread_create(&thread, NULL, curl_thread, NULL);
 	if (ret)
 		return -1;
