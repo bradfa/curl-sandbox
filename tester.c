@@ -5,9 +5,15 @@
 #include <sys/queue.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <string.h>
 
-#define CURL_SIMUL	128
-#define LIST_SIZE	1024
+#define CURL_SIMUL	1
+#define LIST_MAX	2
+#define HOSTNAME	"localhost"
+#define DATA		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>" \
+			"<top><middle>something</middle></top>"
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -34,9 +40,12 @@ void *curl_thread(void *aa)
 		pthread_mutex_lock(&mutex);
 		while (!head.lh_first)
 			pthread_cond_wait(&cond, &mutex);
+		printf("Thread found %d entries waiting in list\n", list_len);
 		while (head.lh_first && (count < CURL_SIMUL)) {
 			entry = head.lh_first;
 			LIST_REMOVE(entry, entries);
+			list_len--;
+			count++;
 			easy_handle = curl_easy_init();
 			curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, 0);
 			curl_easy_setopt(easy_handle, CURLOPT_NOSIGNAL, 1);
@@ -51,6 +60,7 @@ void *curl_thread(void *aa)
 			ret = curl_multi_add_handle(multi_handle, easy_handle);
 		}
 		pthread_mutex_unlock(&mutex);
+		pthread_cond_signal(&cond);
 		do { /* Call multi_perform again as needed to complete */
 			struct timeval timeout;
 			fd_set fdread, fdwrite, fdexcep;
@@ -87,6 +97,7 @@ void *curl_thread(void *aa)
 			}
 		} while (still_left);
 curl_error:
+		printf("Thread completed CURL operations\n");
 		msg = curl_multi_info_read(multi_handle, &still_left);
 		while (msg) {
 			curl_multi_remove_handle(multi_handle,
@@ -102,6 +113,8 @@ int main(void)
 {
 	int ret;
 	struct entry *entry;
+	char *data;
+	char *hostname;
 	pthread_t thread;
 	list_len = 0;
 
@@ -109,7 +122,30 @@ int main(void)
 	if (ret)
 		return -1;
 	for (;;) {
-		sleep(1);
+		pthread_mutex_lock(&mutex);
+		while (list_len >= LIST_MAX)
+			pthread_cond_wait(&cond, &mutex);
+		printf("Main found only %d entries in the list\n", list_len);
+		while (list_len < LIST_MAX) {
+			entry = malloc(sizeof(struct entry));
+			if (!entry)
+				return -ENOMEM;
+			memset(entry, '\0', sizeof(struct entry));
+			hostname = malloc(strlen(HOSTNAME)+1);
+			if (!hostname)
+				return -ENOMEM;
+			data = malloc(strlen(DATA+1));
+			if (!data)
+				return -ENOMEM;
+			entry->data = data;
+			entry->hostname = hostname;
+			LIST_INSERT_HEAD(&head, entry, entries);
+			list_len++;
+			printf("Main added an entry to the list\n");
+			usleep(100000);
+		}
+		pthread_mutex_unlock(&mutex);
+		pthread_cond_signal(&cond);
 	}
 	return 0;
 }
