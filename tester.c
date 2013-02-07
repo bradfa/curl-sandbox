@@ -11,7 +11,6 @@
 
 #define CURL_SIMUL	128
 #define LIST_MAX	1000
-#define HOSTNAME	"http://www.google.com/"
 #define DATA		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>" \
 			"<top><middle>something</middle></top>"
 
@@ -19,10 +18,10 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 LIST_HEAD(listhead, entry) head;
 int list_len;
+char hostname[] = "http://127.0.0.1/";
 
 struct entry {
 	char *data;
-	char *hostname;
 	LIST_ENTRY(entry) entries;
 };
 
@@ -47,7 +46,7 @@ void *curl_thread(void *aa)
 			list_len--;
 			count++;
 			easy_handle = curl_easy_init();
-			curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, 1);
+			curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, 0);
 			curl_easy_setopt(easy_handle, CURLOPT_NOSIGNAL, 1);
 			curl_easy_setopt(easy_handle, CURLOPT_FAILONERROR, 1);
 			curl_easy_setopt(easy_handle, CURLOPT_NOPROGRESS, 1);
@@ -55,8 +54,9 @@ void *curl_thread(void *aa)
 			curl_easy_setopt(easy_handle, CURLOPT_POST, 1);
 			curl_easy_setopt(easy_handle, CURLOPT_COPYPOSTFIELDS,
 					 entry->data);
-			curl_easy_setopt(easy_handle, CURLOPT_URL,
-					 entry->hostname);
+			free(entry->data);
+			free(entry);
+			curl_easy_setopt(easy_handle, CURLOPT_URL, hostname);
 			ret = curl_multi_add_handle(multi_handle, easy_handle);
 		}
 		pthread_mutex_unlock(&mutex);
@@ -114,7 +114,6 @@ int main(void)
 	int ret;
 	struct entry *entry;
 	char *data;
-	char *hostname;
 	pthread_t thread;
 	list_len = 0;
 
@@ -132,14 +131,10 @@ int main(void)
 			if (!entry)
 				return -ENOMEM;
 			memset(entry, '\0', sizeof(struct entry));
-			hostname = malloc(strlen(HOSTNAME)+1);
-			if (!hostname)
-				return -ENOMEM;
 			data = malloc(strlen(DATA+1));
 			if (!data)
 				return -ENOMEM;
 			entry->data = data;
-			entry->hostname = hostname;
 			pthread_mutex_lock(&mutex);
 			LIST_INSERT_HEAD(&head, entry, entries);
 			list_len++;
