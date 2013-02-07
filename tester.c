@@ -9,8 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CURL_SIMUL	8
+#define CURL_SIMUL	32
 #define LIST_MAX	100
+#define LIST_DELAY	2 /* ms */
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -54,7 +55,8 @@ void *curl_thread(void *aa)
 			curl_easy_setopt(easy_handle, CURLOPT_NOSIGNAL, 1);
 			curl_easy_setopt(easy_handle, CURLOPT_FAILONERROR, 1);
 			curl_easy_setopt(easy_handle, CURLOPT_NOPROGRESS, 1);
-			curl_easy_setopt(easy_handle, CURLOPT_TIMEOUT, 1);
+			curl_easy_setopt(easy_handle, CURLOPT_TIMEOUT_MS,
+					 LIST_DELAY*CURL_SIMUL-10);
 			curl_easy_setopt(easy_handle, CURLOPT_POST, 1);
 			curl_easy_setopt(easy_handle, CURLOPT_COPYPOSTFIELDS,
 					 entry->data);
@@ -146,7 +148,7 @@ int main(void)
 			LIST_INSERT_HEAD(&head, entry, entries);
 			list_len++;
 			pthread_mutex_unlock(&mutex);
-			usleep(100);
+			usleep(LIST_DELAY * 1000);
 		}
 		pthread_cond_signal(&cond);
 	}
