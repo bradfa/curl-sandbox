@@ -9,15 +9,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CURL_SIMUL	32
-#define LIST_MAX	100
+#define CURL_SIMUL	128
+#define LIST_MAX	1000
 #define LIST_DELAY	2 /* ms */
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 LIST_HEAD(listhead, entry) head;
 int list_len;
-const char hostname[] = "http://127.0.0.1/";
+const char hostname[] = "http://129.0.0.1/";
 const char raw_data[] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" \
 		  "<top><middle>something</middle></top>";
 
@@ -87,6 +87,7 @@ void *curl_thread(void *aa)
 				timeout.tv_sec = 0;
 				timeout.tv_usec = 0;
 			}
+			printf("Thread curl_timeout set to %d.%06d s\n", timeout.tv_sec, timeout.tv_usec);
 			ret = curl_multi_fdset(multi_handle, &fdread, &fdwrite, &fdexcep, &maxfd);
 			if (ret)
 				goto curl_error;
