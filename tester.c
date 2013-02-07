@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CURL_SIMUL	128
-#define LIST_MAX	1000
+#define CURL_SIMUL	8
+#define LIST_MAX	100
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -36,6 +36,8 @@ void *curl_thread(void *aa)
 
 	slist = curl_slist_append(slist, "Content-Type:text/xml");
 	multi_handle = curl_multi_init();
+	if (!multi_handle) /* Bad bad bad */
+		pthread_exit(NULL);
 	for (;;) {
 		count = ret = 0;
 		pthread_mutex_lock(&mutex);
