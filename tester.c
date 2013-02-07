@@ -51,7 +51,42 @@ void *curl_thread(void *aa)
 			ret = curl_multi_add_handle(multi_handle, easy_handle);
 		}
 		pthread_mutex_unlock(&mutex);
-		/* TODO: Send the curls! */
+		do { /* Call multi_perform again as needed to complete */
+			struct timeval timeout;
+			fd_set fdread, fdwrite, fdexcep;
+			int maxfd = -1;
+			long curl_timeo = -1;
+			FD_ZERO(&fdread);
+			FD_ZERO(&fdwrite);
+			FD_ZERO(&fdexcep);
+			ret = curl_multi_timeout(multi_handle, &curl_timeo);
+			if (ret)
+				goto curl_error;
+			if (curl_timeo >= 0) {
+				timeout.tv_sec = curl_timeo / 1000;
+				timeout.tv_usec = (curl_timeo % 1000) * 1000;
+			} else {
+				timeout.tv_sec = 0;
+				timeout.tv_usec = 0;
+			}
+			ret = curl_multi_fdset(multi_handle, &fdread, &fdwrite, &fdexcep, &maxfd);
+			if (ret)
+				goto curl_error;
+			ret = select(maxfd+1, &fdread, &fdwrite, &fdexcep, &timeout);
+			switch (ret) {
+			case -1: /* error */
+				break;
+			case 0: /* timeout */
+			default:
+				ret = curl_multi_perform(multi_handle, &still_left);
+				if (ret == CURLM_CALL_MULTI_PERFORM)
+					curl_multi_perform(multi_handle, &still_left);
+				else if (ret != CURLM_OK)
+					goto curl_error;
+				break;
+			}
+		} while (still_left);
+curl_error:
 		msg = curl_multi_info_read(multi_handle, &still_left);
 		while (msg) {
 			curl_multi_remove_handle(multi_handle,
