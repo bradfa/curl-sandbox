@@ -9,9 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define CURL_SIMUL	1
-#define LIST_MAX	2
-#define HOSTNAME	"localhost"
+#define CURL_SIMUL	128
+#define LIST_MAX	1000
+#define HOSTNAME	"http://www.google.com/"
 #define DATA		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>" \
 			"<top><middle>something</middle></top>"
 
@@ -47,7 +47,7 @@ void *curl_thread(void *aa)
 			list_len--;
 			count++;
 			easy_handle = curl_easy_init();
-			curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, 0);
+			curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, 1);
 			curl_easy_setopt(easy_handle, CURLOPT_NOSIGNAL, 1);
 			curl_easy_setopt(easy_handle, CURLOPT_FAILONERROR, 1);
 			curl_easy_setopt(easy_handle, CURLOPT_NOPROGRESS, 1);
@@ -127,6 +127,7 @@ int main(void)
 			pthread_cond_wait(&cond, &mutex);
 		printf("Main found only %d entries in the list\n", list_len);
 		while (list_len < LIST_MAX) {
+			pthread_mutex_unlock(&mutex);
 			entry = malloc(sizeof(struct entry));
 			if (!entry)
 				return -ENOMEM;
@@ -139,12 +140,12 @@ int main(void)
 				return -ENOMEM;
 			entry->data = data;
 			entry->hostname = hostname;
+			pthread_mutex_lock(&mutex);
 			LIST_INSERT_HEAD(&head, entry, entries);
 			list_len++;
-			printf("Main added an entry to the list\n");
-			usleep(100000);
+			pthread_mutex_unlock(&mutex);
+			usleep(100);
 		}
-		pthread_mutex_unlock(&mutex);
 		pthread_cond_signal(&cond);
 	}
 	return 0;
