@@ -11,14 +11,14 @@
 
 #define CURL_SIMUL	128
 #define LIST_MAX	1000
-#define DATA		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>" \
-			"<top><middle>something</middle></top>"
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 LIST_HEAD(listhead, entry) head;
 int list_len;
-char hostname[] = "http://127.0.0.1/";
+const char hostname[] = "http://127.0.0.1/";
+const char raw_data[] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" \
+		  "<top><middle>something</middle></top>";
 
 struct entry {
 	char *data;
@@ -32,7 +32,9 @@ void *curl_thread(void *aa)
 	CURL *easy_handle;
 	CURLMsg *msg;
 	struct entry *entry;
+	struct curl_slist *slist = NULL;
 
+	slist = curl_slist_append(slist, "Content-Type:text/xml");
 	multi_handle = curl_multi_init();
 	for (;;) {
 		count = ret = 0;
@@ -57,6 +59,8 @@ void *curl_thread(void *aa)
 			free(entry->data);
 			free(entry);
 			curl_easy_setopt(easy_handle, CURLOPT_URL, hostname);
+			curl_easy_setopt(easy_handle, CURLOPT_HTTPHEADER,
+					 slist);
 			ret = curl_multi_add_handle(multi_handle, easy_handle);
 		}
 		pthread_mutex_unlock(&mutex);
@@ -107,13 +111,13 @@ curl_error:
 		}
 	}
 	curl_multi_cleanup(multi_handle);
+	curl_slist_free_all(slist);
 }
 
 int main(void)
 {
 	int ret;
 	struct entry *entry;
-	char *data;
 	pthread_t thread;
 	list_len = 0;
 
@@ -131,10 +135,11 @@ int main(void)
 			if (!entry)
 				return -ENOMEM;
 			memset(entry, '\0', sizeof(struct entry));
-			data = malloc(strlen(DATA+1));
-			if (!data)
+			entry->data = malloc(strlen(raw_data)+1);
+			if (!entry->data)
 				return -ENOMEM;
-			entry->data = data;
+			memset(entry->data, '\0', strlen(raw_data)+1);
+			memcpy(entry->data, raw_data, strlen(raw_data)+1);
 			pthread_mutex_lock(&mutex);
 			LIST_INSERT_HEAD(&head, entry, entries);
 			list_len++;
